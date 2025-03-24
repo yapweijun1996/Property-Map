@@ -3,17 +3,80 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Housing Projects Map</title>
+  <title>Housing Projects Map & List</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
   <style>
+    /* Base layout styling */
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: Arial, sans-serif;
+    }
+    .wrapper {
+      display: flex;
+      height: 100%;
+    }
+    .sidebar {
+      width: 300px;
+      padding: 10px;
+      overflow-y: auto;
+      border-right: 1px solid #ccc;
+      box-sizing: border-box;
+    }
+    .map-container {
+      flex: 1;
+      position: relative;
+    }
     #map {
-      height: 600px;
+      height: 100%;
       width: 100%;
+    }
+    .property-item {
+      padding: 8px;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+    font-size:12px;
+    }
+    .property-item:hover {
+      background-color: #f0f0f0;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 10px;
+      box-sizing: border-box;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    /* Responsive styling */
+    @media (max-width: 768px) {
+      .wrapper {
+        flex-direction: column;
+      }
+      .sidebar {
+        width: 100%;
+        height: 40%;
+        border-right: none;
+        border-bottom: 1px solid #ccc;
+      }
+      .map-container {
+        height: 60%;
+      }
     }
   </style>
 </head>
 <body>
-  <div id="map"></div>
+  <div class="wrapper">
+    <div class="sidebar">
+      <input type="text" id="filterInput" placeholder="Filter properties..." />
+      <div id="propertyList"></div>
+    </div>
+    <div class="map-container">
+      <div id="map"></div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
   <script>
     const baseUrl = 'https://teduh.kpkt.gov.my/project-swasta/';
@@ -22,36 +85,107 @@
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    // Function to add markers using provided coordinates from JSON data
+    let markers = []; // Stores markers along with project data.
+    let projectsData = []; // Full JSON data.
+
+    // Create a marker for each project and store the reference.
     function addMarkers(data) {
       const coordsArray = [];
-      data.forEach(project => {
-        // Ensure the project has valid coordinate data
+      data.forEach((project) => {
         if (project.Coordinate && project.Coordinate.lat && project.Coordinate.lon) {
-          const lat = project.Coordinate.lat;
-          const lon = project.Coordinate.lon;
+          const { lat, lon } = project.Coordinate;
           const marker = L.marker([lat, lon]).addTo(map);
-          marker.bindPopup(
-            `<b><a href="${baseUrl}${project["Kod Projek"]}" target="_blank">${project["Kod Projek"]}</a></b><br>
-             <b>${project["Nama Projek"]}</b><br>
-             Developer: ${project["Nama Pemaju"]}<br>
-             Price: RM <b style="font-weight: 900; font-size: 16px;">${project["Harga Minimum (RM)"]}</b> - RM <b style="font-weight: 900; font-size: 16px;">${project["Harga Maksimum (RM)"]}</b><br>
-             Address: ${project["Alamat Perniagaan"]}`
-          );
+          // Build marker popup content
+          const popupContent = `
+              <b><a href="${baseUrl}${project["Kod Projek"]}" target="_blank">${project["Kod Projek"]}</a></b><br>
+              <b>${project["Nama Projek"]}</b><br>
+              Developer: ${project["Nama Pemaju"]}<br>
+              Price: RM <b style="font-weight: 900; font-size: 16px;">${project["Harga Minimum (RM)"]}</b> - RM <b style="font-weight: 900; font-size: 16px;">${project["Harga Maksimum (RM)"]}</b><br>
+              Address: ${project["Alamat Perniagaan"]}
+              ${ project["Kod Pemajuan"] ? `<br><strong>Kod Pemajuan:</strong> ${project["Kod Pemajuan"]}` : '' }
+              ${ project["No. Lesen"] ? `<br><strong>No. Lesen:</strong> ${project["No. Lesen"]}` : '' }
+              ${ project["No. Permit Iklan dan Jualan"] ? `<br><strong>No. Permit Iklan dan Jualan:</strong> ${project["No. Permit Iklan dan Jualan"]}` : '' }
+            `;
+
+          
+          marker.bindPopup(popupContent);
+          markers.push({ marker, project });
           coordsArray.push([lat, lon]);
         } else {
           console.warn(`No coordinates for project: ${project["Nama Projek"]}`);
         }
       });
-
       if (coordsArray.length > 0) {
         map.fitBounds(coordsArray);
-      } else {
-        console.log("No valid coordinates found to adjust map bounds.");
       }
     }
 
-    // Load JSON data (assumed to be in a file named data.json)
+    // Populate the sidebar list with project data.
+    function populateList(data) {
+      const listContainer = document.getElementById('propertyList');
+      listContainer.innerHTML = ''; // Clear previous list
+      data.forEach((project) => {
+        // Create a container for each property with detailed information.
+        const item = document.createElement('div');
+        item.className = 'property-item';
+        item.innerHTML = `
+          <strong>${project["Nama Projek"]}</strong><br>
+          <strong>${project["Nama Pemaju"]}</strong> <br>
+<div style="font-size:10px; padding-top: 10px;">
+          <strong>Kod Pemajuan:</strong> ${project["Kod Pemajuan"]}<br>
+          <strong>No. Lesen:</strong> ${project["No. Lesen"]}<br>
+          <strong>No. Permit Iklan dan Jualan:</strong> ${project["No. Permit Iklan dan Jualan"]}<br>
+          <strong>Alamat Perniagaan:</strong> ${project["Alamat Perniagaan"]}
+    </div>
+`;
+        // On click, pan to marker and open popup.
+        item.addEventListener('click', () => {
+          const found = markers.find(m => m.project["Kod Projek"] === project["Kod Projek"]);
+          if (found) {
+            map.setView(found.marker.getLatLng(), 14);
+            found.marker.openPopup();
+          }
+        });
+        listContainer.appendChild(item);
+      });
+    }
+
+    // Filter function for the property list.
+    function filterList() {
+      const filterText = document.getElementById('filterInput').value.toLowerCase();
+      // Filter based on multiple keys.
+      const filteredData = projectsData.filter(project => {
+        return (
+          (project["Nama Projek"] && project["Nama Projek"].toLowerCase().includes(filterText)) ||
+          (project["Nama Pemaju"] && project["Nama Pemaju"].toLowerCase().includes(filterText)) ||
+          (project["Kod Pemajuan"] && project["Kod Pemajuan"].toLowerCase().includes(filterText)) ||
+          (project["No. Lesen"] && project["No. Lesen"].toLowerCase().includes(filterText)) ||
+          (project["No. Permit Iklan dan Jualan"] && project["No. Permit Iklan dan Jualan"].toLowerCase().includes(filterText)) ||
+          (project["Alamat Perniagaan"] && project["Alamat Perniagaan"].toLowerCase().includes(filterText))
+        );
+      });
+      populateList(filteredData);
+      // Update marker visibility based on filter.
+      markers.forEach(({ marker, project }) => {
+        const match = (
+          (project["Nama Projek"] && project["Nama Projek"].toLowerCase().includes(filterText)) ||
+          (project["Nama Pemaju"] && project["Nama Pemaju"].toLowerCase().includes(filterText)) ||
+          (project["Kod Pemajuan"] && project["Kod Pemajuan"].toLowerCase().includes(filterText)) ||
+          (project["No. Lesen"] && project["No. Lesen"].toLowerCase().includes(filterText)) ||
+          (project["No. Permit Iklan dan Jualan"] && project["No. Permit Iklan dan Jualan"].toLowerCase().includes(filterText)) ||
+          (project["Alamat Perniagaan"] && project["Alamat Perniagaan"].toLowerCase().includes(filterText))
+        );
+        if (match) {
+          marker.addTo(map);
+        } else {
+          map.removeLayer(marker);
+        }
+      });
+    }
+
+    document.getElementById('filterInput').addEventListener('input', filterList);
+
+    // Load JSON data and initialize the map and list.
     fetch('data.json')
       .then(response => {
         if (!response.ok) {
@@ -60,7 +194,9 @@
         return response.json();
       })
       .then(data => {
+        projectsData = data;
         addMarkers(data);
+        populateList(data);
       })
       .catch(error => console.error('Error loading JSON data:', error));
   </script>
