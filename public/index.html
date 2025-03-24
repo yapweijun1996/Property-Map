@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Housing Projects Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+  <style>
+    #map {
+      height: 600px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <script>
+    const baseUrl = 'https://teduh.kpkt.gov.my/project-swasta/';
+    const map = L.map('map').setView([1.8494, 102.9322], 10);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Function to add markers using provided coordinates from JSON data
+    function addMarkers(data) {
+      const coordsArray = [];
+      data.forEach(project => {
+        // Ensure the project has valid coordinate data
+        if (project.Coordinate && project.Coordinate.lat && project.Coordinate.lon) {
+          const lat = project.Coordinate.lat;
+          const lon = project.Coordinate.lon;
+          const marker = L.marker([lat, lon]).addTo(map);
+          marker.bindPopup(
+            `<b><a href="${baseUrl}${project["Kod Projek"]}" target="_blank">${project["Kod Projek"]}</a></b><br>
+             <b>${project["Nama Projek"]}</b><br>
+             Developer: ${project["Nama Pemaju"]}<br>
+             Price: RM <b style="font-weight: 900; font-size: 16px;">${project["Harga Minimum (RM)"]}</b> - RM <b style="font-weight: 900; font-size: 16px;">${project["Harga Maksimum (RM)"]}</b><br>
+             Address: ${project["Alamat Perniagaan"]}`
+          );
+          coordsArray.push([lat, lon]);
+        } else {
+          console.warn(`No coordinates for project: ${project["Nama Projek"]}`);
+        }
+      });
+
+      if (coordsArray.length > 0) {
+        map.fitBounds(coordsArray);
+      } else {
+        console.log("No valid coordinates found to adjust map bounds.");
+      }
+    }
+
+    // Load JSON data (assumed to be in a file named data.json)
+    fetch('data.json')
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Failed to load data.json: ${response.statusText}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        addMarkers(data);
+      })
+      .catch(error => console.error('Error loading JSON data:', error));
+  </script>
+</body>
+</html>
